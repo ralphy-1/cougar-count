@@ -1,0 +1,18 @@
+# secrets — never commit
+firmware/src/secrets.h
+.env
+*.local
+
+# build
+.pio/
+.pioenvs/
+node_modules/
+functions/node_modules/
+
+# firebase
+.firebase/
+firebase-debug.log
+
+# macOS / editors
+.DS_Store
+.vscode/
