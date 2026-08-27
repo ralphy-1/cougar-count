@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Cougar Count — FLC</title>
 <meta name="description" content="How busy the Fitness &amp; Lifestyle Centre is right now.">
-<meta name="theme-color" content="#12151a">
+<!-- FIX 2026-08-27: a single dark theme-color painted the browser chrome dark
+     even for someone on a light phone. One per scheme. -->
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#12151a" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="styles.css">
 </head>

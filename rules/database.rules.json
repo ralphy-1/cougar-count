@@ -1,3 +1,10 @@
+// Cougar Count -- Realtime Database security rules.
+//
+// FIX 2026-08-27: writes now require newData.exists(). Without it a client could
+// DELETE in_total rather than write to it. Firebase does not evaluate .validate
+// on a deletion, so the "+1 only" rule never ran -- anything holding a device
+// credential could erase the whole day's count, which is the exact thing that
+// rule exists to prevent. The next write would then recreate the node at 0.
 {
   "rules": {
     ".read": false,
@@ -8,16 +15,16 @@
         ".read": true,
 
         "in_total": {
-          ".write": "auth != null",
+          ".write": "auth != null && newData.exists()",
           ".validate": "newData.isNumber() && (data.exists() ? newData.val() === data.val() + 1 : newData.val() === 0)"
         },
         "out_total": {
-          ".write": "auth != null",
+          ".write": "auth != null && newData.exists()",
           ".validate": "newData.isNumber() && (data.exists() ? newData.val() === data.val() + 1 : newData.val() === 0)"
         },
 
         "updated_at": {
-          ".write": "auth != null",
+          ".write": "auth != null && newData.exists()",
           ".validate": "newData.isNumber() && newData.val() <= now + 60000"
         },
 

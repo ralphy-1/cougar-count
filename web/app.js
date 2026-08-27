@@ -53,10 +53,23 @@ async function fetchLive() {
   if (!d || typeof d.in_total !== "number" || typeof d.out_total !== "number") {
     throw new Error("unexpected shape");
   }
+  // FIX 2026-08-27: `d.capacity || CONFIG.capacity` silently ignored a stored
+  // capacity of 0 and used the hardcoded default instead. Check the type.
+  const capacity = typeof d.capacity === "number" && d.capacity > 0
+    ? d.capacity
+    : CONFIG.capacity;
+
+  // Clamped because a negative occupancy is meaningless to a reader, but note
+  // that clamping HIDES a broken counter -- if out_total ever exceeds in_total
+  // something is wrong, and the page would show a calm 0. The nightly residual
+  // is what actually catches that; this is only about not showing nonsense.
+  const raw = d.in_total - d.out_total;
+  if (raw < 0) console.warn("occupancy is negative -- a counter is wrong", d);
+
   return {
-    occupancy: Math.max(0, d.in_total - d.out_total),
-    capacity: d.capacity || CONFIG.capacity,
-    updatedAt: d.updated_at || null,
+    occupancy: Math.max(0, raw),
+    capacity,
+    updatedAt: typeof d.updated_at === "number" ? d.updated_at : null,
   };
 }
 
@@ -121,12 +134,28 @@ function render(data) {
   el("stamp").textContent = data.demo ? "sample data — not live yet" : ago(data.updatedAt);
 }
 
+function clockLabel(hour) {
+  const h = hour % 12 || 12;
+  return `${h}${hour < 12 ? "am" : "pm"}`;
+}
+
 function nextOpening() {
   const t = reginaNow();
-  const [open] = t.weekend ? CONFIG.hours.weekend : CONFIG.hours.weekday;
-  const h = open % 12 || 12;
-  const ampm = open < 12 ? "am" : "pm";
-  return t.decimal < open ? `Opens at ${h}${ampm}` : `Opens ${h}${ampm} tomorrow`;
+  const todayOpen = (t.weekend ? CONFIG.hours.weekend : CONFIG.hours.weekday)[0];
+
+  // Before opening: today's own hours are the answer.
+  if (t.decimal < todayOpen) return `Opens at ${clockLabel(todayOpen)}`;
+
+  // FIX 2026-08-27: after closing, this used TODAY's opening time for tomorrow.
+  // On a Friday night it promised 6am when the gym actually opens at 8am on
+  // Saturday, and on a Sunday night it promised 8am for a 6am Monday. Ask what
+  // tomorrow actually is.
+  const tomorrowWeekend = ["Sat", "Sun"].includes(
+    new Intl.DateTimeFormat("en-CA", { timeZone: "America/Regina", weekday: "short" })
+      .format(new Date(Date.now() + 24 * 60 * 60 * 1000))
+  );
+  const tomorrowOpen = (tomorrowWeekend ? CONFIG.hours.weekend : CONFIG.hours.weekday)[0];
+  return `Opens ${clockLabel(tomorrowOpen)} tomorrow`;
 }
 
 function showProblem(message) {
@@ -138,7 +167,14 @@ function showProblem(message) {
   document.body.dataset.state = "unknown";
 }
 
+// FIX 2026-08-27: switching back to the tab fires an update while the 30s timer
+// may already have one in flight. Two responses could then land out of order and
+// render the older one. One at a time.
+let inFlight = false;
+
 async function update() {
+  if (inFlight) return;
+  inFlight = true;
   try {
     render(CONFIG.host ? await fetchLive() : demoLive());
   } catch (err) {
@@ -146,6 +182,8 @@ async function update() {
     // than no number -- someone walks over to a packed gym believing it is empty.
     showProblem("The counter isn't reporting. Try again in a minute.");
     console.error(err);
+  } finally {
+    inFlight = false;
   }
 }
 
