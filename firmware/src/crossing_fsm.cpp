@@ -79,16 +79,22 @@ void CrossingFSM::tick(uint32_t now_ms) {
 // Why the refractory check sits ABOVE the beam-state assignment in feed():
 //
 // The obvious way to write it is to record the new beam state first, then ask
-// whether we can leave refractory. That version counts the first person of the
-// day correctly and then never counts anyone again, forever.
+// whether we can leave refractory. That version is broken in a way that reading
+// it will not reveal.
 //
 // After a crossing we sit in Refractory with both beams clear. The next person
-// arrives and breaks beam A. If we store that break first, the exit condition
-// "both beams clear" is now false -- and it is false BECAUSE of the very event
-// we are trying to react to. We stay in Refractory. That break is discarded.
-// The person walks through, the beams clear, and we are still in Refractory
-// with nothing pending. The same thing happens to the next person, and the one
-// after that.
+// breaks beam A. If we store that break first, the exit condition "both beams
+// clear" is now false -- and it is false BECAUSE of the very event we are
+// trying to react to. We stay in Refractory and discard the break. The same
+// thing happens to the next person, and the one after that. feed() alone never
+// escapes.
 //
-// Nothing crashes. Nothing logs an error. The counter just quietly stops at 1.
+// What makes it nasty is that tick() also checks the refractory exit, and tick()
+// does not touch beam state, so in the real firmware it quietly rescues us --
+// but only if it happens to run in the gap between the beams clearing and the
+// next person arriving. So the counter works on a quiet afternoon and starts
+// dropping people whenever the loop is busy, which is exactly when the gym is
+// busy. Correctness would depend on scheduling luck.
+//
+// Checking first and storing second removes the coupling entirely.
 // ---------------------------------------------------------------------------
