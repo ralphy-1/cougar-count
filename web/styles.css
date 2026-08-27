@@ -1,0 +1,123 @@
+/* One number, read from across the room. Everything else stays out of its way. */
+
+:root {
+  --bg:      #ffffff;
+  --ink:     #14171c;
+  --muted:   #6b7280;
+  --hair:    #e6e8ec;
+  --track:   #eef0f3;
+  --accent:  #4b7f52;
+}
+
+[data-state="steady"] { --accent: #8a7130; }
+[data-state="busy"]   { --accent: #b4602c; }
+[data-state="packed"] { --accent: #a8412f; }
+[data-state="closed"],
+[data-state="unknown"] { --accent: #9aa1ab; }
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:    #12151a;
+    --ink:   #e9ecf1;
+    --muted: #949cab;
+    --hair:  #242930;
+    --track: #1e222a;
+    --accent:#7fae86;
+  }
+  [data-state="steady"] { --accent: #cbae5e; }
+  [data-state="busy"]   { --accent: #e0a05e; }
+  [data-state="packed"] { --accent: #e0745e; }
+  [data-state="closed"],
+  [data-state="unknown"] { --accent: #6c7484; }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.55 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3rem;
+  min-height: 100dvh;
+  padding: 2rem 1.5rem calc(2rem + env(safe-area-inset-bottom));
+  max-width: 34rem;
+  margin: 0 auto;
+}
+
+main { text-align: center; }
+
+.place {
+  margin: 0 0 1.75rem;
+  font-size: .8125rem;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.count {
+  margin: 0;
+  font-size: clamp(4.5rem, 26vw, 8rem);
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+.word {
+  margin: .75rem 0 0;
+  font-size: 1.375rem;
+  font-weight: 500;
+}
+
+.detail {
+  margin: .25rem 0 0;
+  color: var(--muted);
+}
+
+.bar {
+  margin: 2rem auto 0;
+  height: 5px;
+  max-width: 20rem;
+  border-radius: 99px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  width: 0;
+  border-radius: 99px;
+  background: var(--accent);
+  transition: width .6s ease;
+}
+
+.stamp {
+  margin: 1rem 0 0;
+  font-size: .8125rem;
+  color: var(--muted);
+}
+
+footer {
+  border-top: 1px solid var(--hair);
+  padding-top: 1.25rem;
+  font-size: .8125rem;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+footer p { margin: 0 0 .5rem; }
+footer .who { margin: 0; opacity: .8; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fill { transition: none; }
+}
