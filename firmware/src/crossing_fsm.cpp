@@ -1,5 +1,16 @@
 #include "crossing_fsm.h"
 
+// millis() wraps every ~49.7 days and these boards run for months, so a
+// deadline can be a small number while `now` is still huge. Comparing the two
+// directly reads that as "long past" and expires the timer instantly. The
+// difference, taken as signed, stays right through the wrap -- valid as long as
+// the two are under ~24 days apart, which every timeout here is by orders of
+// magnitude. (Durations elsewhere are already unsigned subtractions of two
+// timestamps, which wrap correctly on their own.)
+static inline bool reached(uint32_t now_ms, uint32_t deadline_ms) {
+  return (int32_t)(now_ms - deadline_ms) >= 0;
+}
+
 void CrossingFSM::begin(uint32_t transitMin, uint32_t lingerMax, uint32_t refractory) {
   transitMin_ = transitMin;
   lingerMax_  = lingerMax;
@@ -21,7 +32,7 @@ Cross CrossingFSM::feed(bool isA, bool broken, uint32_t t_ms) {
   // Leave refractory based on the beam states as they were BEFORE this edge,
   // then let the edge be handled normally below. See the note at the bottom of
   // this file -- getting this order wrong is not a small bug.
-  if (st_ == St::Refractory && t_ms >= tRefractoryEnd_ && !aBroken_ && !bBroken_)
+  if (st_ == St::Refractory && reached(t_ms, tRefractoryEnd_) && !aBroken_ && !bBroken_)
     st_ = St::Idle;
 
   if (isA) aBroken_ = broken; else bBroken_ = broken;
@@ -68,7 +79,7 @@ void CrossingFSM::tick(uint32_t now_ms) {
       if (now_ms - tFirstBreak_ > lingerMax_) reset(now_ms);
       break;
     case St::Refractory:
-      if (now_ms >= tRefractoryEnd_ && !aBroken_ && !bBroken_) st_ = St::Idle;
+      if (reached(now_ms, tRefractoryEnd_) && !aBroken_ && !bBroken_) st_ = St::Idle;
       break;
     default:
       break;

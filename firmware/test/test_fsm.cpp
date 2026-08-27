@@ -18,15 +18,30 @@ static void check(bool ok, const char* what) {
   if (!ok) failures++;
 }
 
+// Like check(), but silent when it passes. For invariants asserted inside
+// helpers, where a line of output per beam edge would bury the real test names.
+static void quietCheck(bool ok, const char* what) {
+  if (!ok) check(false, what);
+}
+
 static const bool A = true, B = false;
 
 // One person walking through: first beam breaks, second breaks, first clears,
 // second clears. `transit` is the whole thing end to end.
+//
+// Only the LAST edge may return a count. The FSM decides when both beams are
+// clear, so a crossing returned by an earlier edge is a bug even when the final
+// value happens to be right -- keep the intermediate values instead of dropping
+// them on the floor.
 static Cross walkThrough(CrossingFSM& f, bool firstBeam, uint32_t t0, uint32_t transit) {
   const bool secondBeam = !firstBeam;
-  f.feed(firstBeam,  true,  t0);
-  f.feed(secondBeam, true,  t0 + transit * 4 / 10);
-  f.feed(firstBeam,  false, t0 + transit * 7 / 10);
+  const Cross mid[] = {                      // braced init: evaluated in order
+    f.feed(firstBeam,  true,  t0),
+    f.feed(secondBeam, true,  t0 + transit * 4 / 10),
+    f.feed(firstBeam,  false, t0 + transit * 7 / 10),
+  };
+  for (Cross c : mid)
+    quietCheck(c == Cross::None, "a count arrived before both beams were clear");
   return f.feed(secondBeam, false, t0 + transit);
 }
 
@@ -71,12 +86,19 @@ int main() {
   // --- giving up on a stalled crossing -----------------------------------
   {
     // Someone steps into the doorway and stands there.
+    //
+    // Asserting only that we end up idle does not test tick() at all: the beam
+    // finally clearing runs the same reset, so the whole test passes with the
+    // abandon logic deleted. What tick() actually buys is WHEN the refractory
+    // period starts. Abandon it at 4100 and the quiet period is long over by
+    // the time the beam clears; leave it pending and the clear itself starts a
+    // fresh 250ms of deafness for a crossing that was never counted.
     CrossingFSM f = fresh();
     f.feed(A, true, 1000);
     f.tick(4100);                       // past lingerMax with the beam still broken
-    f.feed(A, false, 4200);             // they finally move
-    f.tick(4600);
-    check(f.isIdle(), "tick abandons a crossing that stalled");
+    check(f.feed(A, false, 20000) == Cross::None, "a stall is never counted");
+    f.tick(20000);                      // they finally move, much later
+    check(f.isIdle(), "tick abandons a stall, so the doorway is live the moment it clears");
   }
 
   // --- the refractory tests: these are the ones that catch the real bug ---
@@ -101,6 +123,59 @@ int main() {
     CrossingFSM f = fresh();
     walkThrough(f, A, 1000, 450);                        // ends at t=1450
     check(walkThrough(f, A, 1500, 300) == Cross::None,   "someone inside the refractory window is lost");
+  }
+
+  {
+    // The other half of the refractory rule, and the one the comment block in
+    // crossing_fsm.cpp is really about: leaving Refractory requires both beams
+    // CLEAR, not just the clock expiring. Drop that condition and the FSM can
+    // wake up in the middle of a body and start timing a crossing from the
+    // wrong beam -- which is worse than losing a count, because it invents a
+    // direction. Here two people walk IN, overlapping, starting inside the
+    // deaf window; both are dropped, but nothing may ever come back as Out.
+    CrossingFSM f = fresh();
+    check(walkThrough(f, A, 1000, 450) == Cross::In, "a counted crossing to open the window");
+
+    const Cross edges[] = {                  // refractory runs to t=1700
+      f.feed(A, true,  1600),                // second person breaks A (deaf)
+      f.feed(B, true,  1750),                // ...and B, now past the clock
+      f.feed(A, false, 1850),
+      f.feed(A, true,  1900),                // third person is right behind
+      f.feed(B, false, 1950),
+      f.feed(B, true,  2100),
+      f.feed(A, false, 2200),
+      f.feed(B, false, 2300),
+    };
+    bool quiet = true;
+    for (Cross c : edges) quiet = quiet && (c == Cross::None);
+    check(quiet, "a body still in the beams cannot end the refractory period");
+  }
+  {
+    // begin() re-arms a live machine; the firmware re-runs it when thresholds
+    // change, and it must not inherit half a crossing from the old settings.
+    CrossingFSM f = fresh();
+    f.feed(A, true, 1000);                               // mid-crossing
+    f.begin(120, 3000, 250);
+    check(f.isIdle(), "begin() clears a half-finished crossing");
+    check(walkThrough(f, A, 2000, 450) == Cross::In, "and counts normally afterwards");
+  }
+
+  // --- millis() wraps every ~49.7 days and these boards run for months -----
+  {
+    // The crossing itself is measured with unsigned subtraction, so it already
+    // survives the wrap. Worth pinning so it stays that way.
+    CrossingFSM f = fresh();
+    check(walkThrough(f, A, 0xFFFFFF00u, 400) == Cross::In, "a crossing that straddles the wrap");
+  }
+  {
+    // The refractory deadline is an absolute timestamp, so it wraps to a small
+    // number while `now` is still huge. A plain `now >= deadline` reads that as
+    // "long past" and opens the door immediately -- double-counting one person
+    // as two, once every 49.7 days, which is not a bug anyone would find by
+    // staring at it.
+    CrossingFSM f = fresh();
+    check(walkThrough(f, A, 0xFFFFFFF0u - 450u, 450) == Cross::In, "a crossing just before the wrap");
+    check(walkThrough(f, A, 0xFFFFFFF5u, 300) == Cross::None,      "the refractory survives the wrap");
   }
 
   printf("\n%s\n", failures ? "SOME TESTS FAILED" : "all tests passed");

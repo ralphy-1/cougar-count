@@ -1,0 +1,84 @@
+# What is in the database
+
+The whole thing is four numbers.
+
+    gym/
+      live/
+        in_total       812      people who have walked in today
+        out_total      765      people who have walked out today
+        updated_at     <ms>     last time a board wrote
+        session_date   "2026-08-27"
+        capacity       150      shown as "how full", never written by a board
+
+      history/
+        2026-08-26/
+          in_total     903
+          out_total    901
+          residual     2        should be 0 -- this is the day's error
+          peak         58
+
+Occupancy is `in_total - out_total`, computed by whoever is looking at it. It is
+never stored.
+
+## Why occupancy is not a stored number
+
+Two boards write to this database and they do not know about each other. If they
+both stored "occupancy", then:
+
+    entrance reads 40, adds 1, writes 41
+    exit     reads 40, subtracts 1, writes 39     <- entrance's person vanished
+
+Both boards did exactly what they were told and a person disappeared. This is a
+race, and it does not show up in testing because it needs two writes to land in
+the same few milliseconds -- which is a busy Tuesday at 5pm, not a quiet
+afternoon at a desk.
+
+Split counters remove the race instead of trying to time around it. The entrance
+board only ever touches `in_total`, the exit board only ever touches `out_total`,
+and neither one ever reads a value it depends on. There is no shared number to
+fight over.
+
+## Why the counters only go up
+
+`in_total` and `out_total` are monotonic. They never decrease during the day, and
+the security rules enforce it: a write is rejected unless the new value is
+**exactly one more** than the old one.
+
+That means a board cannot set the counter to 5000. It cannot set it back to 0. It
+cannot skip. The only thing a valid write can do is add one person. So the worst
+case for a stolen device credential is that someone slowly inflates a number on a
+webpage, one request at a time -- and every one of those requests is a server
+round trip.
+
+It also means the counters cannot be batched. If a board is offline for ten
+minutes and has thirty crossings queued, it must send thirty separate increments
+on reconnect. That is fine -- thirty small requests take a couple of seconds --
+and it is a cheap price for a rule this strict.
+
+## What resets the counters
+
+Nothing on a board can. `+1` is the only legal write, so a board is physically
+incapable of zeroing anything.
+
+The nightly Cloud Function does it, using the admin SDK, which runs with
+privileges above the security rules. It copies the day into `history/`, records
+the residual, and sets both counters to 0.
+
+## The residual is the accuracy metric
+
+The gym is empty when it closes, so `in_total - out_total` should be zero at
+close. Whatever it actually is, is the error accumulated that day. Positive means
+we missed people leaving; negative means we missed people arriving.
+
+This is why occupancy is derived from two separate counters rather than tracked
+as one number -- one number would have no way to tell you it was wrong.
+
+## Why the page is world-readable
+
+`gym/live` is readable without authentication on purpose. It is a count of people
+in a public gym, which is information the gym would happily put on a sign. Making
+it public means the web page needs no credentials, so there is no key to leak in
+the frontend.
+
+`events/` is closed off. Nothing writes there yet; it exists so that per-crossing
+diagnostics can be added later without anyone assuming that path is public.
