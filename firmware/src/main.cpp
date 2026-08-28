@@ -1,5 +1,12 @@
 #include <Arduino.h>
 #include <Preferences.h>
+// esp_random() moved headers between ESP-IDF 4 and 5, which Arduino core 2.x
+// and 3.x follow respectively.
+#if __has_include(<esp_random.h>)
+  #include <esp_random.h>
+#else
+  #include <esp_system.h>
+#endif
 
 #include "config.h"
 #include "lane.h"
@@ -7,6 +14,7 @@
 #include "wire.h"
 #include "wrap.h"      // reached()
 #include "net.h"
+#include "radio.h"
 
 // --- beam edges -------------------------------------------------------------
 //
@@ -62,6 +70,25 @@ static Due         flushRetry_;
 
 static bool     queueDirty_    = false;
 static uint32_t queueTouchedAt_ = 0;
+
+static uint16_t bootId_ = 0;
+static Due      healthBeat_;
+
+#if defined(DEVICE_IS_EXIT)
+// Stop and wait. One crossing is in the air at a time, held in the queue until
+// the entrance board says it has taken it. Slower than streaming, and the only
+// arrangement where a lost frame costs nothing.
+static uint16_t nextSeq_     = 1;
+static uint16_t inFlightSeq_ = 0;
+static bool     awaitingAck_ = false;
+#endif
+
+static uint8_t laneMask() {
+  uint8_t mask = 0;
+  for (uint8_t i = 0; i < LANE_COUNT; i++)
+    if (lanes_[i].isHealthy()) mask |= (uint8_t)(1u << i);
+  return mask;
+}
 
 // --- flash ------------------------------------------------------------------
 
@@ -147,6 +174,18 @@ static void drainEdges() {
   }
 }
 
+#if defined(DEVICE_IS_ENTRANCE)
+
+// This board is the only one on the campus network, so everything ends up here:
+// its own crossings and the exit board's.
+static void collectFromPeer(uint32_t now_ms) {
+  int8_t dir = 0;
+  while (Radio::takeCrossing(dir)) {
+    queue_.push(dir);
+    touchQueue(now_ms);
+  }
+}
+
 static void flushQueue(uint32_t now_ms) {
   if (queue_.empty() || !Net::ready()) return;
   if (!flushRetry_.due(now_ms)) return;
@@ -160,11 +199,42 @@ static void flushQueue(uint32_t now_ms) {
   if (Net::sendCrossing((Cross)dir)) {
     queue_.pop();
     touchQueue(now_ms);
-    if (!queue_.empty()) flushRetry_.armIn(now_ms, 50);   // keep draining, one per pass
+    if (!queue_.empty()) flushRetry_.armIn(now_ms, 50);   // keep draining
   } else {
     flushRetry_.postpone(now_ms);
   }
 }
+
+#else   // DEVICE_IS_EXIT
+
+// Nothing here reaches Firebase. The exit board's whole job is to get crossings
+// across the room to the entrance board, which is why only one MAC address had
+// to be registered with IT.
+static void flushQueue(uint32_t now_ms) {
+  if (awaitingAck_ && Radio::ackSeen(inFlightSeq_)) {
+    queue_.pop();
+    awaitingAck_ = false;
+    touchQueue(now_ms);
+  }
+
+  if (queue_.empty()) return;
+  if (!flushRetry_.due(now_ms)) return;
+
+  int8_t dir = 0;
+  if (!queue_.peek(dir)) return;
+
+  // The sequence number is chosen once and reused for every retry of the same
+  // crossing. That is what lets the far end tell a retry from a second person.
+  if (!awaitingAck_) {
+    inFlightSeq_ = nextSeq_++;
+    awaitingAck_ = true;
+  }
+
+  Radio::sendCrossing(dir, inFlightSeq_, laneMask(), LANE_COUNT);
+  flushRetry_.armIn(now_ms, LINK_RETRY_MS);
+}
+
+#endif
 
 static bool wasHealthy_[LANE_COUNT];
 
@@ -200,10 +270,18 @@ void setup() {
   }
 #endif
 
+  // A fresh boot id every restart, so the far board can tell that our sequence
+  // numbers have started over rather than jumped backwards.
+  bootId_ = (uint16_t)esp_random();
+  Radio::begin(bootId_);
+
+#if defined(DEVICE_IS_ENTRANCE)
   Net::begin();
+#endif
 
   const uint32_t now = millis();
   heartbeat_.begin(HEARTBEAT_MS, now);
+  healthBeat_.begin(HEALTH_EVERY_MS, now);
   flushRetry_.begin(FLUSH_RETRY_MS, now);
 
   for (uint8_t i = 0; i < LANE_COUNT; i++) wasHealthy_[i] = true;
@@ -216,7 +294,10 @@ void setup() {
 void loop() {
   const uint32_t now = millis();
 
+#if defined(DEVICE_IS_ENTRANCE)
   Net::service(now);
+  collectFromPeer(now);
+#endif
 
 #if SIMULATE
   simulate(now);
@@ -229,10 +310,16 @@ void loop() {
 
   flushQueue(now);
 
+#if defined(DEVICE_IS_ENTRANCE)
   // A failed heartbeat retries in five seconds, not two minutes. The website
   // stops showing a number after six minutes of silence, so there is room for
   // exactly two failures before the site goes blank.
   if (heartbeat_.due(now) && !Net::sendHeartbeat()) heartbeat_.armIn(now, 5000);
+#else
+  // Say how the lanes are doing even when nobody is walking through. A quiet
+  // afternoon must not look the same as a door that stopped reporting.
+  if (healthBeat_.due(now)) Radio::sendHealth(laneMask(), LANE_COUNT);
+#endif
 
   maybeSaveQueue(now);
 }

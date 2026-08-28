@@ -47,6 +47,13 @@ IT as small as possible -- one registered device instead of two.
 
 If the network drops, crossings queue in flash and go up when it returns.
 
+The exit board holds each crossing until the entrance board says it has taken
+it, and resends until that acknowledgement arrives. Every crossing carries a
+sequence number and the sender's boot id, so a resend caused by a lost
+acknowledgement is recognised as the same person rather than counted as a
+second one. The link is encrypted, because an open radio at a gym entrance
+could be injected into by anyone standing nearby.
+
 ## 4. In the database
 
 Four values. This is everything that leaves the building.

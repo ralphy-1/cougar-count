@@ -33,6 +33,11 @@ c++ -std=c++17 -o /tmp/cc_test_wire firmware/test/test_wire.cpp firmware/src/wir
 /tmp/cc_test_wire
 
 echo
+echo "== radio link =="
+c++ -std=c++17 -o /tmp/cc_test_link firmware/test/test_link.cpp firmware/src/link.cpp -I firmware/src
+/tmp/cc_test_link
+
+echo
 echo "== web page =="
 "$JSC" web/test/test_page.js
 

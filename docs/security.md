@@ -87,6 +87,21 @@ We are accepting this knowingly. The consequence is a wrong occupancy number, wh
 is self-evident to anyone standing in the gym and is corrected at the nightly reset.
 There is no personal data to reach and no other system to pivot into.
 
+### The radio link between the two boards
+
+The exit board sends its crossings to the entrance board over ESP-NOW rather
+than having its own network access. That link is **encrypted** with a pre-shared
+key held in `secrets.h`.
+
+This matters more than it might sound. An unencrypted ESP-NOW link at a gym
+entrance could be injected into by anyone within radio range holding about
+twenty dollars of hardware, and the injected crossings would be indistinguishable
+from real ones. Encryption is what makes the count trustworthy at all.
+
+Frames are also checksummed and versioned, and each carries a sequence number
+with the sender's boot id, so a crossing that arrives twice is counted once.
+Every one of those checks is verified by tests that run without hardware.
+
 ### TLS certificate verification — CONDITIONAL
 
 The firmware verifies the Firebase certificate against a root CA supplied in

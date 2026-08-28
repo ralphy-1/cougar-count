@@ -101,6 +101,16 @@ static const uint32_t FLUSH_RETRY_MS = 5000;
 // every single person.
 static const uint32_t QUEUE_SAVE_IDLE_MS = 10000;
 
+// The exit board holds each crossing until the entrance board acknowledges it,
+// and resends this often until it does. Short, because an unacknowledged
+// crossing is a person who is not on the website yet.
+static const uint32_t LINK_RETRY_MS = 400;
+
+// Lane health goes across the radio on its own schedule too, so a stuck beam on
+// the exit door is visible to the board doing the writing even during a quiet
+// spell with no crossings to carry it.
+static const uint32_t HEALTH_EVERY_MS = 30000;
+
 // Generate synthetic crossings instead of reading pins. Lets the whole pipeline
 // -- lanes, queue, auth, writes, heartbeat -- be exercised end to end before any
 // sensor exists. Set to 0 for real hardware.
