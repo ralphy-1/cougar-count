@@ -87,6 +87,17 @@ We are accepting this knowingly. The consequence is a wrong occupancy number, wh
 is self-evident to anyone standing in the gym and is corrected at the nightly reset.
 There is no personal data to reach and no other system to pivot into.
 
+### TLS certificate verification — CONDITIONAL
+
+The firmware verifies the Firebase certificate against a root CA supplied in
+`secrets.h` as `FIREBASE_ROOT_CA`. If that is left empty the connection still
+works but the certificate is **not** verified, and the firmware says so on the
+serial console every time it connects.
+
+Empty is acceptable on a bench. It is not acceptable on the campus network,
+where an unverified TLS connection can be intercepted and rewritten by anyone
+positioned to do so. The root certificate must be filled in before installation.
+
 ### Firmware updates
 
 No over-the-air updates. Firmware is flashed over USB with the board in hand.
