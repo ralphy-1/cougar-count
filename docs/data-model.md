@@ -55,6 +55,34 @@ minutes and has thirty crossings queued, it must send thirty separate increments
 on reconnect. That is fine -- thirty small requests take a couple of seconds --
 and it is a cheap price for a rule this strict.
 
+## updated_at is a heartbeat, not a side effect
+
+**The boards must write `updated_at` on a timer -- every two minutes -- whether
+or not anyone crossed a beam.** This is a contract the firmware has to honour,
+not an optimisation.
+
+The web page refuses to display a count it believes is stale: older than six
+minutes, or with no timestamp at all. It shows "the counter hasn't reported
+recently" instead of a number. That exists because the alternative is worse -- a
+board that dies at 2pm would otherwise show 2pm's number all evening, and someone
+reading a confident "12 - Quiet" walks across campus to a packed gym.
+
+If `updated_at` were only written when someone crossed a beam, then an empty gym
+at 6am would be indistinguishable from a dead board, and the page would call a
+perfectly healthy system broken. Hence the timer.
+
+Write it with the server timestamp sentinel:
+
+    { ".sv": "timestamp" }
+
+not the board's own clock. The security rules require `updated_at` to land within
+five minutes of server time, which the sentinel satisfies by definition -- and an
+ESP32's clock is wrong until NTP answers, which may be never if the network is
+down.
+
+Six minutes is three missed heartbeats. That is deliberately forgiving: a single
+dropped write on flaky wifi must not blank the page.
+
 ## What resets the counters
 
 Nothing on a board can. `+1` is the only legal write, so a board is physically

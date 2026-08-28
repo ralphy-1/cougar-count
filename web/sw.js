@@ -3,6 +3,23 @@
 // count is a lie, and someone acting on a stale "quiet" walks into a packed gym.
 
 const SHELL = "cougar-count-shell-v1";
+
+// FIX 2026-08-28 (pass 5): fetch() never times out on its own. Network-first
+// with no limit means that on the kind of signal you get in a stairwell -- a
+// connection that accepts the request and then says nothing -- the page hangs
+// instead of loading, even though a perfectly good copy is sitting in the cache
+// a few millimetres away. Four seconds, then use what we have.
+const NETWORK_TIMEOUT_MS = 4000;
+
+function fromNetwork(request) {
+  return new Promise((resolve, reject) => {
+    const giveUp = setTimeout(() => reject(new Error("network timeout")), NETWORK_TIMEOUT_MS);
+    fetch(request).then(
+      (res) => { clearTimeout(giveUp); resolve(res); },
+      (err) => { clearTimeout(giveUp); reject(err); }
+    );
+  });
+}
 const FILES = ["./", "index.html", "styles.css", "app.js", "manifest.json"];
 
 self.addEventListener("install", (e) => {
@@ -30,7 +47,7 @@ self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
 
   e.respondWith(
-    fetch(e.request)
+    fromNetwork(e.request)
       .then((res) => {
         // FIX 2026-08-27: every response was cached, including 404s. The two
         // missing icons got stored as failures and kept being served from the
@@ -41,6 +58,21 @@ self.addEventListener("fetch", (e) => {
         }
         return res;
       })
-      .catch(() => caches.match(e.request).then((r) => r || caches.match("index.html")))
+      .catch(() =>
+        caches
+          .match(e.request)
+          .then((r) => r || caches.match("index.html"))
+          // FIX 2026-08-28 (pass 6): on a first visit with no network there is
+          // nothing cached, so this resolved to undefined -- and respondWith
+          // (undefined) throws a TypeError, which the browser renders as a
+          // generic network failure with no clue what happened. Answer properly.
+          .then((r) =>
+            r ||
+            new Response("Offline, and this page has not been cached yet.", {
+              status: 503,
+              headers: { "Content-Type": "text/plain" },
+            })
+          )
+      )
   );
 });

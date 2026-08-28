@@ -5,6 +5,14 @@
 // on a deletion, so the "+1 only" rule never ran -- anything holding a device
 // credential could erase the whole day's count, which is the exact thing that
 // rule exists to prevent. The next write would then recreate the node at 0.
+//
+// FIX 2026-08-28: updated_at must now be roughly the current server time, not
+// merely "not in the future". It could previously be written as 1, which pins
+// the page into its stale state permanently -- and the page now REFUSES to show
+// a number it believes is stale, so that became a way to switch the site off.
+// The narrow window also forces boards to write the server timestamp sentinel
+// {".sv": "timestamp"} rather than their own clock, which is what we want
+// anyway: an ESP32's clock is wrong until NTP answers.
 {
   "rules": {
     ".read": false,
@@ -25,7 +33,7 @@
 
         "updated_at": {
           ".write": "auth != null && newData.exists()",
-          ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+          ".validate": "newData.isNumber() && newData.val() >= now - 300000 && newData.val() <= now + 60000"
         },
 
         "session_date": { ".write": false },
