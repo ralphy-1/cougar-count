@@ -26,8 +26,9 @@ bool ackSeen(uint16_t seq);
 // a duplicate that goes unacknowledged is retried forever.
 bool takeCrossing(int8_t& dir);
 
-// Health reported by the far board, or 0xFF if it has never been heard from.
-uint8_t peerLanesOk();
-bool    peerHeardFrom();
+// Whether every lane on the FAR board is counting. False if it has gone quiet,
+// because a board we cannot hear is not a board we can vouch for -- silence and
+// a blocked beam look the same from here, and both mean people are being missed.
+bool peerAllLanesOk(uint32_t now_ms, uint32_t staleAfterMs);
 
 }  // namespace Radio

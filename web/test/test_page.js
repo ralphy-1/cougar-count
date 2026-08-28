@@ -7,7 +7,7 @@
 // Minimal stubs so web/app.js can be loaded outside a browser.
 var els = {};
 function mkEl() { return { textContent: "", style: {} }; }
-["count","word","detail","fill","stamp"].forEach(id => els[id] = mkEl());
+["count","word","detail","fill","stamp","warn"].forEach(id => els[id] = mkEl());
 
 var document = {
   body: { dataset: {} },
@@ -117,6 +117,23 @@ drainMicrotasks();
 check(els.count.textContent === 18,         "the page recovers when the network comes back");
 
 CONFIG.host = null;
+
+// --- a door that stopped counting --------------------------------------------
+render({ occupancy: 40, capacity: 150, updatedAt: Date.now(), lanesOk: true });
+check(els.warn.hidden === true,        "no warning when both doors are counting");
+
+render({ occupancy: 40, capacity: 150, updatedAt: Date.now(), lanesOk: false });
+check(els.warn.hidden === false,       "a blocked door is called out");
+check(/higher/.test(els.warn.textContent), "and says which way the number is wrong");
+check(els.count.textContent === 40,    "the number is still shown -- it is a floor, not a fiction");
+
+// The warning must not outlive the number it described.
+render({ occupancy: 40, capacity: 150, updatedAt: Date.now() - 60 * 60 * 1000, lanesOk: false });
+check(els.warn.hidden === true,        "a stale reading clears the door warning too");
+
+// Absent means nobody has said otherwise, not "broken".
+render({ occupancy: 40, capacity: 150, updatedAt: Date.now() });
+check(els.warn.hidden === true,        "a missing all_lanes_ok is not treated as a fault");
 
 print("");
 print(failures ? "SOME CHECKS FAILED" : "all checks passed");

@@ -112,6 +112,9 @@ async function fetchLive() {
     occupancy: Math.max(0, raw),
     capacity,
     updatedAt: typeof d.updated_at === "number" ? d.updated_at : null,
+    // Absent means "nobody has said otherwise", which is the right default for
+    // a database that predates this field. Only an explicit false is a warning.
+    lanesOk: d.all_lanes_ok !== false,
   };
 }
 
@@ -130,6 +133,7 @@ function demoLive() {
     occupancy: Math.max(0, Math.round(base + wobble)),
     capacity: CONFIG.capacity,
     updatedAt: Date.now(),
+    lanesOk: true,
     demo: true,
   };
 }
@@ -203,6 +207,19 @@ function render(data) {
   const share = data.capacity > 0 ? (data.occupancy / data.capacity) * 100 : 0;
   el("fill").style.width = `${Math.min(100, share)}%`;
   el("stamp").textContent = data.demo ? "sample data — not live yet" : ago(data.updatedAt);
+
+  // A door whose beam is blocked stops counting, and everyone who walks through
+  // it is invisible. The number is still worth showing -- it is a floor, not a
+  // fiction -- but showing it without saying so would be the confident-and-wrong
+  // failure this page exists to avoid.
+  const warn = el("warn");
+  if (data.lanesOk === false) {
+    warn.textContent = "One of the doors isn't counting right now, so the real number is higher.";
+    warn.hidden = false;
+  } else {
+    warn.textContent = "";
+    warn.hidden = true;
+  }
 }
 
 function clockLabel(hour) {
@@ -230,6 +247,7 @@ function nextOpening() {
 }
 
 function showProblem(message) {
+  el("warn").hidden = true;
   el("count").textContent = "—";
   el("word").textContent = "Can't tell right now";
   el("detail").textContent = message;

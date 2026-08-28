@@ -6,6 +6,13 @@
 // credential could erase the whole day's count, which is the exact thing that
 // rule exists to prevent. The next write would then recreate the node at 0.
 //
+// FIX 2026-08-28: the creation branch required newData === 0. No device can ever
+// legitimately write 0 -- only the nightly reset does, and that runs through the
+// admin SDK, above these rules entirely. Meanwhile the increment sentinel
+// against a node that does not exist resolves to 1, so the very first count
+// against a fresh database was rejected, with nothing to indicate why. Creation
+// now accepts 1, which is what one person walking through actually produces.
+//
 // FIX 2026-08-28: updated_at must now be roughly the current server time, not
 // merely "not in the future". It could previously be written as 1, which pins
 // the page into its stale state permanently -- and the page now REFUSES to show
@@ -24,16 +31,21 @@
 
         "in_total": {
           ".write": "auth != null && newData.exists()",
-          ".validate": "newData.isNumber() && (data.exists() ? newData.val() === data.val() + 1 : newData.val() === 0)"
+          ".validate": "newData.isNumber() && (data.exists() ? newData.val() === data.val() + 1 : newData.val() === 1)"
         },
         "out_total": {
           ".write": "auth != null && newData.exists()",
-          ".validate": "newData.isNumber() && (data.exists() ? newData.val() === data.val() + 1 : newData.val() === 0)"
+          ".validate": "newData.isNumber() && (data.exists() ? newData.val() === data.val() + 1 : newData.val() === 1)"
         },
 
         "updated_at": {
           ".write": "auth != null && newData.exists()",
           ".validate": "newData.isNumber() && newData.val() >= now - 300000 && newData.val() <= now + 60000"
+        },
+
+        "all_lanes_ok": {
+          ".write": "auth != null && newData.exists()",
+          ".validate": "newData.isBoolean()"
         },
 
         "session_date": { ".write": false },

@@ -40,6 +40,15 @@ int main() {
     check(strcmp(HEARTBEAT_PATH, "/gym/live/updated_at.json") == 0, "heartbeat path is updated_at");
   }
 
+  {
+    check(strcmp(LANES_OK_PATH, "/gym/live/all_lanes_ok.json") == 0, "lane health path");
+    check(strcmp(boolBody(true),  "true")  == 0, "true is JSON true, not a quoted string");
+    check(strcmp(boolBody(false), "false") == 0, "and false is JSON false");
+    // The rules validate isBoolean(). "true" in quotes would be rejected by the
+    // server and the page would never hear that a door had gone blind.
+    check(boolBody(true)[0] != '"', "not quoted, or the rules reject it");
+  }
+
   // --- Due -----------------------------------------------------------------
   {
     Due d;

@@ -15,3 +15,7 @@ static_assert(TRANSIT_MIN_MS < LINGER_MAX_MS,
               "the fastest allowed crossing must be faster than the slowest");
 static_assert(STUCK_AFTER_MS > LINGER_MAX_MS,
               "a stuck beam must outlast an ordinary stall, or every dawdler blocks a lane");
+static_assert(PEER_SILENT_MS > HEALTH_EVERY_MS,
+              "the far board must be allowed to miss at least one report before we disown it");
+static_assert(LINK_RETRY_MS < FLUSH_RETRY_MS,
+              "a radio retry should be quicker than a network retry; it is a metre, not the internet");

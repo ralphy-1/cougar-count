@@ -111,6 +111,11 @@ static const uint32_t LINK_RETRY_MS = 400;
 // spell with no crossings to carry it.
 static const uint32_t HEALTH_EVERY_MS = 30000;
 
+// The exit board reports its health every HEALTH_EVERY_MS. Three missed reports
+// and we stop vouching for it -- silence and a blocked beam look identical from
+// the entrance board, and both mean people are being missed.
+static const uint32_t PEER_SILENT_MS = HEALTH_EVERY_MS * 3;
+
 // Generate synthetic crossings instead of reading pins. Lets the whole pipeline
 // -- lanes, queue, auth, writes, heartbeat -- be exercised end to end before any
 // sensor exists. Set to 0 for real hardware.

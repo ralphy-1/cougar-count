@@ -24,4 +24,7 @@ bool sendCrossing(Cross c);
 // is alive; without it a healthy but empty gym looks identical to a dead board.
 bool sendHeartbeat();
 
+// Reports whether every lane on BOTH doors is counting.
+bool sendLanesOk(bool ok);
+
 }  // namespace Net

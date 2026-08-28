@@ -187,4 +187,9 @@ bool sendHeartbeat() {
   return putJson(rtdbUrl(HEARTBEAT_PATH), HEARTBEAT_BODY);
 }
 
+bool sendLanesOk(bool ok) {
+  if (!ready()) return false;
+  return putJson(rtdbUrl(LANES_OK_PATH), boolBody(ok));
+}
+
 }  // namespace Net

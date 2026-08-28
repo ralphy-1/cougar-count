@@ -26,6 +26,11 @@ extern const char* const INCREMENT_BODY;
 extern const char* const HEARTBEAT_BODY;
 extern const char* const HEARTBEAT_PATH;
 
+// Whether every lane on both doors is counting. False means the number on the
+// website is a floor rather than the truth, and the page says so.
+extern const char* const LANES_OK_PATH;
+const char* boolBody(bool v);
+
 // A periodic timer that survives the millis() wrap.
 class Due {
 public:

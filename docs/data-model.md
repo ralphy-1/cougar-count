@@ -9,6 +9,7 @@ The whole thing is four numbers.
         updated_at     <ms>     last time a board wrote
         session_date   "2026-08-27"
         capacity       150      shown as "how full", never written by a board
+        all_lanes_ok   true     is every door still counting?
 
       history/
         2026-08-26/
@@ -42,7 +43,9 @@ fight over.
 
 `in_total` and `out_total` are monotonic. They never decrease during the day, and
 the security rules enforce it: a write is rejected unless the new value is
-**exactly one more** than the old one.
+**exactly one more** than the old one. Against a node that does not exist yet, a
+write of exactly `1` is allowed -- that is what one person walking through
+produces, since the increment sentinel resolves to 1 on a missing node.
 
 That means a board cannot set the counter to 5000. It cannot set it back to 0. It
 cannot skip. The only thing a valid write can do is add one person. So the worst
@@ -82,6 +85,22 @@ down.
 
 Six minutes is three missed heartbeats. That is deliberately forgiving: a single
 dropped write on flaky wifi must not blank the page.
+
+## all_lanes_ok
+
+False means at least one lane has stopped counting -- a beam blocked by a
+propped door or a bin, or the exit board having gone quiet on the radio. The
+page still shows the number, because it is a floor rather than a fiction, but it
+says out loud that the real figure is higher.
+
+The entrance board owns this value and reports for both doors: its own lanes,
+plus the exit board's health as last heard over the radio. Silence counts as
+not-ok after three missed reports, because from the entrance board a silent
+peer and a blocked beam look identical, and both mean people are being missed.
+
+It is written on change rather than on a timer. A door going blind is the thing
+a reader most needs to be told, and waiting up to two minutes for the next
+heartbeat to carry it is two minutes of a number nobody knows to distrust.
 
 ## What resets the counters
 

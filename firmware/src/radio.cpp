@@ -23,8 +23,10 @@ volatile bool     havePending_   = false;
 volatile int8_t   pendingDir_    = 0;
 volatile uint16_t lastAckSeq_    = 0;
 volatile bool     haveAck_       = false;
-volatile uint8_t  peerLanesOk_   = 0xFF;
+volatile uint8_t  peerLanesOk_   = 0;
+volatile uint8_t  peerLaneCount_ = 0;
 volatile bool     peerHeard_     = false;
+volatile uint32_t peerHeardAt_   = 0;
 
 Dedup dedup_;
 
@@ -63,8 +65,10 @@ void onReceive(RECV_ARGS) {
     return;
   }
 
-  peerLanesOk_ = f.lanesOk;
-  peerHeard_   = true;
+  peerLanesOk_   = f.lanesOk;
+  peerLaneCount_ = f.laneCount;
+  peerHeard_     = true;
+  peerHeardAt_   = millis();
 
   if (f.kind == LINK_HEALTH) return;
   if (f.kind != LINK_CROSSING) return;
@@ -168,7 +172,13 @@ bool takeCrossing(int8_t& dir) {
   return true;
 }
 
-uint8_t peerLanesOk()  { return peerLanesOk_; }
-bool    peerHeardFrom() { return peerHeard_; }
+bool peerAllLanesOk(uint32_t now_ms, uint32_t staleAfterMs) {
+  if (!peerHeard_) return false;                       // never heard from at all
+  if (now_ms - peerHeardAt_ > staleAfterMs) return false;   // gone quiet
+  if (peerLaneCount_ == 0 || peerLaneCount_ > 8) return false;
+
+  const uint8_t all = (uint8_t)((1u << peerLaneCount_) - 1u);
+  return (peerLanesOk_ & all) == all;
+}
 
 }  // namespace Radio

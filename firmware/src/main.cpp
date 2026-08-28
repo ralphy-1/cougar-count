@@ -83,6 +83,13 @@ static uint16_t inFlightSeq_ = 0;
 static bool     awaitingAck_ = false;
 #endif
 
+#if defined(DEVICE_IS_ENTRANCE)
+// What the website is told. Both doors have to be counting: this board's lanes,
+// and the exit board's as last reported over the radio.
+static bool lastReportedOk_ = true;
+static bool haveReported_   = false;
+#endif
+
 static uint8_t laneMask() {
   uint8_t mask = 0;
   for (uint8_t i = 0; i < LANE_COUNT; i++)
@@ -315,6 +322,23 @@ void loop() {
   // stops showing a number after six minutes of silence, so there is room for
   // exactly two failures before the site goes blank.
   if (heartbeat_.due(now) && !Net::sendHeartbeat()) heartbeat_.armIn(now, 5000);
+
+  // Report a change the moment it happens rather than waiting for the next
+  // heartbeat -- a door going blind is the thing a reader most needs told. Once
+  // reported, it is left alone until it changes back.
+  {
+    const uint8_t mine = laneMask();
+    const uint8_t allMine = (uint8_t)((1u << LANE_COUNT) - 1u);
+    const bool ok = (mine == allMine) && Radio::peerAllLanesOk(now, PEER_SILENT_MS);
+
+    if (!haveReported_ || ok != lastReportedOk_) {
+      if (Net::sendLanesOk(ok)) {
+        lastReportedOk_ = ok;
+        haveReported_   = true;
+        Serial.printf("[health] reported all_lanes_ok=%s\n", ok ? "true" : "false");
+      }
+    }
+  }
 #else
   // Say how the lanes are doing even when nobody is walking through. A quiet
   // afternoon must not look the same as a door that stopped reporting.

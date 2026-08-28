@@ -101,6 +101,19 @@ main { text-align: center; }
   transition: width .6s ease;
 }
 
+.warn {
+  margin: 1rem auto 0;
+  max-width: 24rem;
+  padding: .625rem .875rem;
+  border-radius: .5rem;
+  background: var(--track);
+  font-size: .8125rem;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.warn[hidden] { display: none; }
+
 .stamp {
   margin: 1rem 0 0;
   font-size: .8125rem;

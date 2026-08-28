@@ -4,6 +4,9 @@
 const char* const INCREMENT_BODY = "{\".sv\":{\"increment\":1}}";
 const char* const HEARTBEAT_BODY = "{\".sv\":\"timestamp\"}";
 const char* const HEARTBEAT_PATH = "/gym/live/updated_at.json";
+const char* const LANES_OK_PATH  = "/gym/live/all_lanes_ok.json";
+
+const char* boolBody(bool v) { return v ? "true" : "false"; }
 
 const char* counterPath(Cross c) {
   switch (c) {
