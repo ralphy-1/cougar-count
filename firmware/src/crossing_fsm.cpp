@@ -3,12 +3,19 @@
 // millis() wraps every ~49.7 days and these boards run for months, so a
 // deadline can be a small number while `now` is still huge. Comparing the two
 // directly reads that as "long past" and expires the timer instantly. The
-// difference, taken as signed, stays right through the wrap -- valid as long as
-// the two are under ~24 days apart, which every timeout here is by orders of
-// magnitude. (Durations elsewhere are already unsigned subtractions of two
-// timestamps, which wrap correctly on their own.)
+// difference stays right through the wrap as long as the two are under ~24 days
+// apart, which every timeout here is by orders of magnitude. (Durations
+// elsewhere are already unsigned subtractions of two timestamps, which wrap
+// correctly on their own.)
+//
+// FIX 2026-08-28: this was `(int32_t)(now_ms - deadline_ms) >= 0`. Converting a
+// uint32_t above INT32_MAX to int32_t is implementation-defined before C++20 --
+// it happens to do the right thing on GCC and Clang, but it was leaning on the
+// compiler rather than the standard. The unsigned form below is fully defined
+// everywhere and means exactly the same: the gap is less than half the range,
+// so `now` is at or past the deadline rather than long before it.
 static inline bool reached(uint32_t now_ms, uint32_t deadline_ms) {
-  return (int32_t)(now_ms - deadline_ms) >= 0;
+  return (now_ms - deadline_ms) < 0x80000000u;
 }
 
 void CrossingFSM::begin(uint32_t transitMin, uint32_t lingerMax, uint32_t refractory) {
